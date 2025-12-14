@@ -1,0 +1,5 @@
+*.o
+c-wire
+tmp/
+graphs/
+output_c.txt
