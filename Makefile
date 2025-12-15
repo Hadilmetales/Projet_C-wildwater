@@ -14,3 +14,4 @@ avl.o: avl.c header.h
 
 clean:
 	rm -f *.o c-wire output_c.txt
+
