@@ -3,7 +3,7 @@
 **Projet réalisé par le groupe :**
 - **Metales Hadil**
 - **Lenny Vega**
-- **Ziane**
+- **Ziane Berreghis**
 
 Cursus : Pré-ING2 (2025-2026)
 
@@ -24,4 +24,5 @@ Pour construire l'exécutable, lancez simplement la commande :
 
 ```bash
 make
+
 
