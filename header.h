@@ -5,25 +5,29 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Structure pour representer une usine avec les 3 valeurs du Bonus
+// Structure modifiée pour gérer les IDs textuels (ex: "Plant #1")
 typedef struct Station {
-    int id;                 // Identifiant
-    long capacite;          // Capacité Max (Barre totale)
-    long vol_source;        // Eau captée depuis les sources
-    long vol_traite;        // Eau réellement traitée (sortie)
-    int hauteur;            // Pour l'AVL
+    char id[50];            // Changé de int a char[]
+    long capacite;
+    long consommation;
+    long production;
+    
+    int hauteur;
     struct Station* gauche;
     struct Station* droite;
 } Station;
 
-// Fonctions AVL
-Station* creerStation(int id, long cap, long source, long traite);
+// Prototypes
+Station* creerStation(char* id); // Prend un char* maintenant
 int max(int a, int b);
 int hauteur(Station* n);
 int equilibre(Station* n);
+
 Station* rotationDroite(Station* y);
 Station* rotationGauche(Station* x);
-Station* inserer(Station* noeud, int id, long cap, long source, long traite);
+
+// Insertion avec ID textuel
+Station* inserer(Station* noeud, char* id, long cap, long source, long prod);
 void parcoursInfixe(Station* noeud, FILE* fichier);
 void libererArbre(Station* noeud);
 
