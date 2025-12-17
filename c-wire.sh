@@ -1,67 +1,90 @@
 #!/bin/bash
 
-if [ "$#" -ne 3 ]; then
-    echo "Usage: $0 [csv] [station] [conso]"
+# Verification des arguments
+if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 [csv] histo [max|src|real]"
+    echo "   ou: $0 [csv] leaks [ID]"
     exit 1
 fi
 
-FICHIER="$1"
-STATION="$2"
-CONSO="$3"
+CSV="$1"
+CMD="$2"
+PARAM="$3"
 
-if [ ! -f "$FICHIER" ]; then
-    echo "Erreur fichier"
-    exit 1
+# Verification de l'executable
+if [ ! -f "c-wire" ]; then
+    make
 fi
 
-make
-if [ $? -ne 0 ]; then exit 1; fi
-
+# Dossiers temporaires
 mkdir -p tmp graphs
-rm -f tmp/data_filtered.csv
+rm -f tmp/data.csv data_output.txt
 
-echo "Traitement Bonus..."
+if [ "$CMD" == "histo" ]; then
+    echo "1. Filtrage du CSV..."
+    
+    # On prepare les donnees pour le C
+    awk -F';' '
+    ($2 ~ /Plant/ || $2 ~ /Unit/ || $2 ~ /Facility/) && $4 != "" && $4 != "-" { 
+        print $2 ";" $4 ";0;0" 
+    }
+    ($2 ~ /Source/ || $2 ~ /Well/ || $2 ~ /Spring/ || $2 ~ /Fountain/) && ($3 ~ /Plant/ || $3 ~ /Unit/ || $3 ~ /Module/) { 
+        print $3 ";0;" $4 ";0" 
+    }
+    ($2 ~ /Plant/ || $2 ~ /Unit/ || $2 ~ /Facility/) && $3 ~ /Storage/ { 
+        print $2 ";0;0;" $5 
+    }
+    ' "$CSV" > tmp/data.csv
 
-# Filtrage intelligent avec AWK pour le Bonus
-# On genere 4 colonnes : ID ; CAP ; SOURCE ; TRAITE
-# 1. Ligne Usine (Capacité) -> ID;Cap;0;0
-# 2. Ligne Source->Usine (Entrée) -> ID;0;Vol;0
-# 3. Ligne Usine->Stockage (Sortie) -> ID;0;0;Vol
-awk -F';' '
-    $2 ~ /Facility/ && $4 != "" { print $2 ";" $4 ";0;0" } 
-    $2 ~ /Spring/ && $3 ~ /Facility/ { print $3 ";0;" $4 ";0" }
-    $2 ~ /Facility/ && $3 ~ /Storage/ { print $2 ";0;0;" $5 }
-' "$FICHIER" | tr -d '[:alpha:] #' > tmp/data_filtered.csv
+    echo "2. Calcul C (AVL)..."
+    ./c-wire tmp/data.csv
 
-# Execution du C
-./c-wire tmp/data_filtered.csv
+    if [ ! -s "data_output.txt" ]; then
+        echo "Erreur: Pas de donnees en sortie du C."
+        exit 1
+    fi
 
-if [ $? -ne 0 ]; then exit 1; fi
+    echo "3. Tri et Selection (Top 5 + Bottom 5)..."
+    
+    # On choisit la colonne de tri selon le parametre
+    # Colonnes du fichier C : ID:MAX:SRC:REAL
+    SORT_COL=2
+    if [ "$PARAM" == "src" ]; then SORT_COL=3; fi
+    if [ "$PARAM" == "real" ]; then SORT_COL=4; fi
 
-echo "Generation du graphique Bonus..."
+    # On trie numériquement (-n) sur la colonne choisie (-k)
+    # -t: definit le separateur
+    sort -t":" -k${SORT_COL}n data_output.txt > tmp/sorted.txt
 
-if [ -s "output_c.txt" ]; then
-    # Script Gnuplot pour Histogramme Empilé (Stacked)
+    # On prend les 5 plus petits (debut du fichier)
+    head -n 5 tmp/sorted.txt > tmp/graph_data.txt
+    
+    # On prend les 5 plus grands (fin du fichier)
+    tail -n 5 tmp/sorted.txt >> tmp/graph_data.txt
+
+    echo "4. Generation du Graphique..."
+    
     gnuplot -persist <<-EOF
-        set terminal png size 1000,600
-        set output 'graphs/resultat.png'
-        set title "Bilan Usines (Capacite vs Source vs Traite)"
+        set terminal png size 800,600
+        set output 'graphs/graph_${PARAM}.png'
         set style data histograms
-        set style histogram rowstacked
         set style fill solid
         set boxwidth 0.5
         set grid
         set datafile separator ":"
-        # Colonnes C : 1=ID, 2=Max, 3=Source, 4=Real
-        # Gnuplot empile : 
-        # Bleu = Reel ($4)
-        # Rouge = Pertes (Source - Reel) = ($3 - $4)
-        # Vert = Capacité Restante (Max - Source) = ($2 - $3)
-        plot "output_c.txt" using 4 title "Traite (Reel)" lc rgb "blue", \
-             "" using (\$3-\$4) title "Pertes" lc rgb "red", \
-             "" using (\$2-\$3):xtic(1) title "Capacite Restante" lc rgb "green"
+        set xtics rotate by -45
+        set title "Histogramme : ${PARAM} (Min 5 + Max 5)"
+        set ylabel "Volume (m3)"
+        set xlabel "Usines"
+        
+        # On plot le fichier filtré
+        plot "tmp/graph_data.txt" using ${SORT_COL}:xtic(1) title "${PARAM}" lc rgb "blue"
 EOF
-    echo "Graphique cree : graphs/resultat.png"
-else
-    echo "Pas de donnees."
+    echo "Graphique généré : graphs/graph_${PARAM}.png"
+
+elif [ "$CMD" == "leaks" ]; then
+    echo "Le traitement des fuites (leaks) n'est pas encore fini."
+    # Ici, tu pourrais ajouter le grep pour trouver la ligne de l'usine si tu veux
 fi
+
+echo "Terminé."
