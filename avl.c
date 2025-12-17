@@ -1,15 +1,15 @@
 #include "header.h"
 
-// Crée une nouvelle station avec les 3 valeurs
-Station* creerStation(int id, long cap, long source, long traite) {
-    Station* s = (Station*)malloc(sizeof(Station));
-    if (s == NULL) {
-        exit(1);
-    }
-    s->id = id;
-    s->capacite = cap;
-    s->vol_source = source;
-    s->vol_traite = traite;
+Station* creerStation(char* id) {
+    Station* s = malloc(sizeof(Station));
+    if (s == NULL) exit(1);
+    
+    // On copie le texte de l'ID dans la structure
+    strcpy(s->id, id);
+    
+    s->capacite = 0;
+    s->consommation = 0;
+    s->production = 0;
     s->hauteur = 1;
     s->gauche = NULL;
     s->droite = NULL;
@@ -17,16 +17,8 @@ Station* creerStation(int id, long cap, long source, long traite) {
 }
 
 int max(int a, int b) { return (a > b) ? a : b; }
-
-int hauteur(Station* n) {
-    if (n == NULL) return 0;
-    return n->hauteur;
-}
-
-int equilibre(Station* n) {
-    if (n == NULL) return 0;
-    return hauteur(n->gauche) - hauteur(n->droite);
-}
+int hauteur(Station* n) { return (n == NULL) ? 0 : n->hauteur; }
+int equilibre(Station* n) { return (n == NULL) ? 0 : hauteur(n->gauche) - hauteur(n->droite); }
 
 Station* rotationDroite(Station* y) {
     Station* x = y->gauche;
@@ -48,44 +40,52 @@ Station* rotationGauche(Station* x) {
     return y;
 }
 
-// Insertion avec gestion des sommes pour le Bonus
-Station* inserer(Station* noeud, int id, long cap, long source, long traite) {
-    if (noeud == NULL) return creerStation(id, cap, source, traite);
+Station* inserer(Station* noeud, char* id, long cap, long source, long prod) {
+    if (noeud == NULL) {
+        Station* n = creerStation(id);
+        n->capacite = cap;
+        n->consommation = source;
+        n->production = prod;
+        return n;
+    }
 
-    if (id < noeud->id)
-        noeud->gauche = inserer(noeud->gauche, id, cap, source, traite);
-    else if (id > noeud->id)
-        noeud->droite = inserer(noeud->droite, id, cap, source, traite);
-    else {
-        // L'usine existe deja : on cumule les donnees
-        // Si on recoit une capacite (ligne usine), on met a jour (car c'est pas une somme)
+    // Comparaison alphabetique avec strcmp
+    int cmp = strcmp(id, noeud->id);
+
+    if (cmp < 0) {
+        noeud->gauche = inserer(noeud->gauche, id, cap, source, prod);
+    } else if (cmp > 0) {
+        noeud->droite = inserer(noeud->droite, id, cap, source, prod);
+    } else {
+        // Meme ID trouvé, on ajoute les valeurs
         if (cap > 0) noeud->capacite = cap;
-        noeud->vol_source += source;
-        noeud->vol_traite += traite;
+        noeud->consommation += source;
+        noeud->production += prod;
         return noeud;
     }
 
     noeud->hauteur = 1 + max(hauteur(noeud->gauche), hauteur(noeud->droite));
-    int balance = equilibre(noeud);
+    int bal = equilibre(noeud);
 
-    if (balance > 1 && id < noeud->gauche->id) return rotationDroite(noeud);
-    if (balance < -1 && id > noeud->droite->id) return rotationGauche(noeud);
-    if (balance > 1 && id > noeud->gauche->id) {
+    // Rotations (utilisant strcmp pour verifier ou on est)
+    if (bal > 1 && strcmp(id, noeud->gauche->id) < 0) return rotationDroite(noeud);
+    if (bal < -1 && strcmp(id, noeud->droite->id) > 0) return rotationGauche(noeud);
+    if (bal > 1 && strcmp(id, noeud->gauche->id) > 0) {
         noeud->gauche = rotationGauche(noeud->gauche);
         return rotationDroite(noeud);
     }
-    if (balance < -1 && id < noeud->droite->id) {
+    if (bal < -1 && strcmp(id, noeud->droite->id) < 0) {
         noeud->droite = rotationDroite(noeud->droite);
         return rotationGauche(noeud);
     }
     return noeud;
 }
 
-// Ecrit : ID:CAPACITE:SOURCE:TRAITE
 void parcoursInfixe(Station* noeud, FILE* fichier) {
     if (noeud != NULL) {
         parcoursInfixe(noeud->gauche, fichier);
-        fprintf(fichier, "%d:%ld:%ld:%ld\n", noeud->id, noeud->capacite, noeud->vol_source, noeud->vol_traite);
+        // %s pour afficher le string ID
+        fprintf(fichier, "%s:%ld:%ld:%ld\n", noeud->id, noeud->capacite, noeud->consommation, noeud->production);
         parcoursInfixe(noeud->droite, fichier);
     }
 }
